@@ -157,22 +157,65 @@ def get_transcript(video_id, languages=None):
         raise e
 
 
-def display_transcript(transcript_data):
+def process_transcript_to_paragraphs(transcript_data, pause_threshold=2.0):
     """
-    Display the transcript with timestamps in a formatted way.
+    Process transcript into paragraphs based on pauses and sentence structure.
     """
-    st.markdown('<div class="transcript-container">', unsafe_allow_html=True)
+    paragraphs = []
+    current_paragraph = {'start': None, 'texts': []}
+    previous_end = 0
 
     for entry in transcript_data:
-        # Handle both dict-like and object-like access
         if hasattr(entry, 'start'):
-            timestamp = format_timestamp(entry.start)
-            text = entry.text
+            start = entry.start
+            text = entry.text.strip()
+            duration = entry.duration if hasattr(entry, 'duration') else 2.0
         else:
-            timestamp = format_timestamp(entry['start'])
-            text = entry['text']
+            start = entry.get('start', 0)
+            text = entry.get('text', '').strip()
+            duration = entry.get('duration', 2.0)
 
-        # Create a formatted line with timestamp and text
+        current_end = start + duration
+        pause = start - previous_end
+
+        # New paragraph if: first entry, long pause, or sentence end + pause
+        if current_paragraph['start'] is None:
+            current_paragraph['start'] = start
+            current_paragraph['texts'].append(text)
+        elif pause > pause_threshold or (pause > 1.0 and current_paragraph['texts'] and
+                                          current_paragraph['texts'][-1].rstrip().endswith(('.', '!', '?', '。', '！', '？'))):
+            if current_paragraph['texts']:
+                paragraphs.append({
+                    'start': current_paragraph['start'],
+                    'text': ' '.join(current_paragraph['texts'])
+                })
+            current_paragraph = {'start': start, 'texts': [text]}
+        else:
+            current_paragraph['texts'].append(text)
+
+        previous_end = current_end
+
+    if current_paragraph['texts']:
+        paragraphs.append({
+            'start': current_paragraph['start'],
+            'text': ' '.join(current_paragraph['texts'])
+        })
+
+    return paragraphs
+
+
+def display_transcript(transcript_data):
+    """
+    Display the transcript with timestamps in paragraph format.
+    """
+    paragraphs = process_transcript_to_paragraphs(transcript_data)
+
+    st.markdown('<div class="transcript-container">', unsafe_allow_html=True)
+
+    for para in paragraphs:
+        timestamp = format_timestamp(para['start'])
+        text = para['text']
+
         st.markdown(
             f'<div class="transcript-line">'
             f'<span class="timestamp">{timestamp}</span> '
@@ -275,10 +318,20 @@ def main():
             st.success(f"✅ Transcript retrieved successfully! ({len(transcript)} entries)")
             st.info(f"🌐 Detected language: **{lang_name}**")
 
+            # Process into paragraphs for better readability
+            paragraphs = process_transcript_to_paragraphs(transcript)
+
             # Prepare data for export
             transcript_lines = []
             csv_rows = ["Timestamp,Text"]  # CSV header
 
+            # TXT: Use paragraphs for readability
+            for para in paragraphs:
+                timestamp = format_timestamp(para['start'])
+                text = para['text']
+                transcript_lines.append(f"[{timestamp}] {text}")
+
+            # CSV: Keep original granular entries
             for entry in transcript:
                 if hasattr(entry, 'start'):
                     timestamp = format_timestamp(entry.start)
@@ -287,8 +340,6 @@ def main():
                     timestamp = format_timestamp(entry['start'])
                     text = entry['text']
 
-                transcript_lines.append(f"[{timestamp}] {text}")
-                # Escape quotes in CSV
                 csv_text = text.replace('"', '""')
                 csv_rows.append(f'"{timestamp}","{csv_text}"')
 
@@ -299,6 +350,8 @@ def main():
             txt_with_prompt = f"""Please analyze this YouTube video transcript and provide:
 1. A brief summary (2-3 sentences) of the main topic and key points
 2. The cleaned up, readable transcript below
+
+The transcript has been automatically processed into paragraphs for better readability.
 
 ---
 
