@@ -30,8 +30,8 @@ Thumbs.db
 
 # Downloaded transcripts (if any)
 transcripts/
-*.txt
-*.csv
+transcript_*.txt
+transcript_*.csv
 
 # Environment variables
 .env
