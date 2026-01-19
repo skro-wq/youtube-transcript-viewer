@@ -22,8 +22,8 @@ A simple web app to automatically fetch Korean/English transcripts from YouTube 
 
 ```bash
 # Clone the repository | 저장소 복제
-git clone https://github.com/yourusername/youtube-transcript.git
-cd youtube-transcript
+git clone https://github.com/skro-wq/youtube-transcript-viewer.git
+cd youtube-transcript-viewer
 
 # Run the app | 앱 실행
 ./yt
